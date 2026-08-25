@@ -45,7 +45,7 @@ export default function Configurator() {
   const [timber, setTimber] = useState(timbers[0]);
   const [length, setLength] = useState(84);
   const [diameter, setDiameter] = useState(54);
-  const [width, setWidth] = useState(40);
+  const [width] = useState(42);
   const [edge, setEdge] = useState<EdgeSlug>("soft-square");
   const [base, setBase] = useState<BaseSlug>("curved-slab-frame");
   const [chair, setChair] = useState<ChairSlug>("none");
@@ -123,10 +123,6 @@ export default function Configurator() {
       if (nextShape === "circle") setDiameter(Math.min(72, Math.max(42, nextSize)));
       else setLength(Math.min(120, Math.max(72, nextSize)));
     }
-    if (nextShape !== "circle") {
-      const nextWidth = Number(parts[3]);
-      if ([36, 40, 42, 44].includes(nextWidth)) setWidth(nextWidth);
-    }
     if (edgesForShape(nextShape).some((item) => item.slug === nextEdge)) setEdge(nextEdge);
     if (basesForShape(nextShape).some((item) => item.slug === nextBase)) setBase(nextBase);
     else setBase(basesForShape(nextShape)[0].slug);
@@ -164,7 +160,7 @@ export default function Configurator() {
         <fieldset><legend>Timber</legend><div className="choice-row timber-row">{timbers.map((item) => <button type="button" className={timber.name === item.name ? "active" : ""} onClick={() => setTimber(item)} key={item.name}><i style={{background:item.color}}/>{item.name}</button>)}</div></fieldset>
         {shape === "circle" ? <fieldset><legend>Diameter</legend><div className="range-wrap"><input aria-label="Table diameter" type="range" min="42" max="72" step="6" value={diameter} onChange={(event) => setDiameter(Number(event.target.value))}/><div><span>42&quot;</span><strong>{diameter}&quot;</strong><span>72&quot;</span></div></div></fieldset> : <>
           <fieldset><legend>Length</legend><div className="range-wrap"><input aria-label="Table length" type="range" min="72" max="120" step="6" value={length} onChange={(event) => setLength(Number(event.target.value))}/><div><span>72&quot;</span><strong>{length}&quot;</strong><span>120&quot;</span></div></div></fieldset>
-          <fieldset><legend>Width</legend><div className="choice-row">{[36,40,42,44].map((item) => <button type="button" className={width === item ? "active" : ""} onClick={() => setWidth(item)} key={item}>{item}&quot;</button>)}</div></fieldset>
+          <fieldset><legend>Width</legend><div className="choice-row"><button type="button" className="active" aria-pressed="true">42&quot;</button></div><p className="fine-print">Canonical study width. Additional widths can be derived from the same model later.</p></fieldset>
         </>}
         <fieldset><legend>Edge profile</legend><div className="choice-row">{availableEdges.map((item) => <button type="button" className={edge === item.slug ? "active" : ""} onClick={() => setEdge(item.slug)} key={item.slug}>{item.name}</button>)}</div></fieldset>
         <fieldset><legend>Base study</legend><div className="choice-row base-options">{availableBases.map((item) => <button type="button" className={base === item.slug ? "active" : ""} onPointerEnter={() => preloadStudy(shape, item.slug)} onFocus={() => preloadStudy(shape, item.slug)} onClick={() => setBase(item.slug)} key={item.slug}>{item.name}</button>)}</div></fieldset>
