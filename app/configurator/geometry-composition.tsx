@@ -118,17 +118,26 @@ function drawFitted(context: CanvasRenderingContext2D, image: HTMLImageElement, 
   context.restore();
 }
 
+function seatFacingTable(origin: V3): Seat {
+  const direction = sub({ x: 0, y: 0, z: 0 }, origin);
+  const yaw = Math.atan2(direction.x, -direction.z);
+  const forward = unit(sub(CAMERA.target, CAMERA.position));
+  const centerDepth = dot(sub({ x: 0, y: 0, z: 0 }, CAMERA.position), forward);
+  const layer = dot(sub(origin, CAMERA.position), forward) > centerDepth ? "far" : "near";
+  return { origin, yaw, layer };
+}
+
 function rectangleSeats(length: number, width: number): Seat[] {
   const count = length <= 84 ? 2 : length <= 102 ? 3 : 4;
   const halfLength = length / 2, halfWidth = width / 2, offset = 13, usable = length - 30;
   const seats: Seat[] = [];
   for (let index = 0; index < count; index++) {
-    const x = count === 1 ? 0 : -usable / 2 + index * (usable / (count - 1));
-    seats.push({ origin: { x, y: 0, z: -halfWidth - offset }, yaw: Math.PI, layer: "near" });
-    seats.push({ origin: { x, y: 0, z: halfWidth + offset }, yaw: 0, layer: "far" });
+    const z = count === 1 ? 0 : -usable / 2 + index * (usable / (count - 1));
+    seats.push(seatFacingTable({ x: -halfWidth - offset, y: 0, z }));
+    seats.push(seatFacingTable({ x: halfWidth + offset, y: 0, z }));
   }
-  seats.push({ origin: { x: -halfLength - offset, y: 0, z: 0 }, yaw: Math.PI / 2, layer: "near" });
-  seats.push({ origin: { x: halfLength + offset, y: 0, z: 0 }, yaw: -Math.PI / 2, layer: "far" });
+  seats.push(seatFacingTable({ x: 0, y: 0, z: -halfLength - offset }));
+  seats.push(seatFacingTable({ x: 0, y: 0, z: halfLength + offset }));
   return seats;
 }
 
@@ -138,10 +147,7 @@ function roundSeats(diameter: number): Seat[] {
   return Array.from({ length: count }, (_, index) => {
     const angle = -Math.PI / 2 + index * Math.PI * 2 / count;
     const origin = { x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius };
-    const forward = unit(sub(CAMERA.target, CAMERA.position));
-    const centerDepth = dot(sub({ x: 0, y: 0, z: 0 }, CAMERA.position), forward);
-    const layer = dot(sub(origin, CAMERA.position), forward) > centerDepth ? "far" : "near";
-    return { origin, yaw: angle + Math.PI / 2, layer };
+    return seatFacingTable(origin);
   });
 }
 
@@ -204,7 +210,7 @@ export function GeometryComposition({
       drawSeats("far");
       const cell = spriteCell(shape, base, edgeColumn, row);
       const tableCell = { x: cell.x * tableImage.naturalWidth, y: cell.y * tableImage.naturalHeight, width: cell.width * tableImage.naturalWidth, height: cell.height * tableImage.naturalHeight };
-      const tableBounds = projectedBounds(boxCorners({ x: 0, y: 0, z: 0 }, tableLength / 2, 30, tableWidth / 2), project);
+      const tableBounds = projectedBounds(boxCorners({ x: 0, y: 0, z: 0 }, tableWidth / 2, 30, tableLength / 2), project);
       drawFitted(context, tableImage, tableCell, tableBounds);
       drawSeats("near");
     }).catch(() => undefined);
