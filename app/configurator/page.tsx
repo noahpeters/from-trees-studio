@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   basesForShape,
-  chairLayerPath,
   chairs,
   edgesForShape,
   shapes,
@@ -16,7 +15,7 @@ import {
   type EdgeSlug,
   type ShapeSlug,
 } from "./catalog";
-import { backgroundForCell, spriteCell } from "./sprite-matrix";
+import { GeometryComposition, geometryChairAssetPaths } from "./geometry-composition";
 
 const timbers = [
   { name: "White oak", slug: "white-oak", color: "#c3a579" },
@@ -81,8 +80,7 @@ export default function Configurator() {
 
   function preloadChair(nextShape: ShapeSlug, nextChair: ChairSlug) {
     if (nextChair === "none") return;
-    (["back", "front"] as const).forEach((layer) => {
-      const source = chairLayerPath(nextShape, nextChair, layer);
+    geometryChairAssetPaths.forEach((source) => {
       if (preloadedSprites.has(source)) return;
       const image = new window.Image();
       image.src = source;
@@ -144,26 +142,6 @@ export default function Configurator() {
     window.history.replaceState(null, "", `/configurator?${parts.join("--")}`);
   }, [urlReady, shape, timber.slug, diameter, length, width, edge, selectedBase.slug, chair]);
 
-  const cell = spriteCell(shape, selectedBase.slug, selectedEdge.column, row);
-  // A dining table does not get taller when it gets longer, and its chairs do
-  // not change size. Only the horizontal table footprint and chair spacing do.
-  const tableScaleX = [0.68, 0.78, 0.86][row];
-  const tableScaleY = 0.76;
-  const compositionScale = [1.12, 1.04, 0.98][row];
-  // Position atlases already contain perspective-correct chair sizing. Never
-  // scale the completed layer: doing so drags every anchored chair toward the
-  // center of the image and destroys the seating arrangement.
-  const chairScale = 1;
-  const spriteStyle = {
-    backgroundImage: `url(${spritePath(shape, selectedBase.slug)})`,
-    ...backgroundForCell(cell),
-    transform: `scaleX(${tableScaleX * compositionScale}) scaleY(${tableScaleY * compositionScale})`,
-  };
-  const chairCellStyle = {
-    ...backgroundForCell({ x: 0, y: row / 3, width: 1, height: 1 / 3 }),
-  };
-  const chairBackStyle = chair === "none" ? undefined : { backgroundImage: `url(${chairLayerPath(shape, chair, "back")})`, ...chairCellStyle, transform: `scale(${chairScale})` };
-  const chairFrontStyle = chair === "none" ? undefined : { backgroundImage: `url(${chairLayerPath(shape, chair, "front")})`, ...chairCellStyle, transform: `scale(${chairScale})` };
   const chairName = chairs.find((item) => item.slug === chair)?.name ?? "None";
 
   const subject = `Table study \u2014 ${shape}, ${timber.name}, ${dimension}`;
@@ -175,10 +153,8 @@ export default function Configurator() {
     <section className="sketch-config">
       <div className="sketch-board">
         <div className="sketch-label"><span>Concept study</span><span>{selectedBase.name}</span></div>
-        <div className="rendered-study"><div className="rendered-stage" role="img" aria-label={`${selectedEdge.name} ${shape} table with a ${selectedBase.name} base${chair === "none" ? "" : ` and ${chairName.toLowerCase()} chairs`}`}>
-          {chair !== "none" && <div className="rendered-layer chair-layer chairs-occluded" style={chairBackStyle}/>}
-          <div className="rendered-layer table-layer" style={spriteStyle}/>
-          {chair !== "none" && <div className="rendered-layer chair-layer chairs-unoccluded" style={chairFrontStyle}/>}
+        <div className="rendered-study"><div className="rendered-stage">
+          <GeometryComposition shape={shape} base={selectedBase.slug} edgeColumn={selectedEdge.column} row={row} length={length} width={width} diameter={diameter} chair={chair} label={`${selectedEdge.name} ${shape} table with a ${selectedBase.name} base${chair === "none" ? "" : ` and ${chairName.toLowerCase()} chairs`}`}/>
         </div></div>
         <div className="study-spec"><strong>{dimension}</strong><span>{timber.name} / {selectedEdge.name}</span></div>
         <div className="sketch-caption"><span>Seats approximately {seats}</span><span>Concept only · not to scale</span></div>
