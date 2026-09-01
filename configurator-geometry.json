@@ -1,0 +1,91 @@
+{
+  "version": 2,
+  "units": "inches",
+  "stage": { "width": 600, "height": 600, "projectionOffset": [-36, 0] },
+  "room": { "width": 168, "length": 192, "height": 108 },
+  "camera": {
+    "position": [-154, 118, -176],
+    "target": [0, 28, 0],
+    "verticalFieldOfViewDegrees": 34,
+    "up": [0, 1, 0]
+  },
+  "table": {
+    "height": 30,
+    "topThickness": 1.5,
+    "canonicalWidth": 42,
+    "rectangleLengths": [72, 96, 120],
+    "ovalLengths": [72, 96, 120],
+    "circleDiameters": [48, 60, 72]
+  },
+  "baseStyles": [
+    "curved-slab-frame",
+    "a-frame",
+    "mid-century-splayed",
+    "x-trestle",
+    "sculpted-turned-pedestal",
+    "curved-trestle",
+    "solid-pedestal",
+    "tapered-pedestal",
+    "four-tapered-legs",
+    "turned-legs-classic",
+    "turned-legs-simplified"
+  ],
+  "roundBaseStyles": [
+    "mid-century-splayed",
+    "sculpted-turned-pedestal",
+    "solid-pedestal",
+    "tapered-pedestal",
+    "four-tapered-legs",
+    "turned-legs-classic",
+    "turned-legs-simplified"
+  ],
+  "chair": {
+    "seatWidth": 18,
+    "seatDepth": 18,
+    "seatHeight": 18,
+    "overallHeight": 38,
+    "tableEdgeClearance": 3
+  },
+  "rectangularAnchors": {
+    "longSideFractions": [-0.8, -0.4, 0, 0.4, 0.8],
+    "small": [-0.52, 0.52],
+    "medium": [-0.72, 0, 0.72],
+    "large": [-0.78, -0.26, 0.26, 0.78],
+    "includeEndChairs": true
+  },
+  "atlasLocations": [
+    { "id": "rect-near-0", "family": "rectangular", "side": "near", "fraction": -0.8 },
+    { "id": "rect-near-1", "family": "rectangular", "side": "near", "fraction": -0.4 },
+    { "id": "rect-near-2", "family": "rectangular", "side": "near", "fraction": 0 },
+    { "id": "rect-near-3", "family": "rectangular", "side": "near", "fraction": 0.4 },
+    { "id": "rect-near-4", "family": "rectangular", "side": "near", "fraction": 0.8 },
+    { "id": "rect-far-0", "family": "rectangular", "side": "far", "fraction": -0.8 },
+    { "id": "rect-far-1", "family": "rectangular", "side": "far", "fraction": -0.4 },
+    { "id": "rect-far-2", "family": "rectangular", "side": "far", "fraction": 0 },
+    { "id": "rect-far-3", "family": "rectangular", "side": "far", "fraction": 0.4 },
+    { "id": "rect-far-4", "family": "rectangular", "side": "far", "fraction": 0.8 },
+    { "id": "rect-left-end", "family": "rectangular", "side": "left-end" },
+    { "id": "rect-right-end", "family": "rectangular", "side": "right-end" },
+    { "id": "round-00", "family": "round", "angleDegrees": -90 },
+    { "id": "round-01", "family": "round", "angleDegrees": -64.285714 },
+    { "id": "round-02", "family": "round", "angleDegrees": -38.571429 },
+    { "id": "round-03", "family": "round", "angleDegrees": -12.857143 },
+    { "id": "round-04", "family": "round", "angleDegrees": 12.857143 },
+    { "id": "round-05", "family": "round", "angleDegrees": 38.571429 },
+    { "id": "round-06", "family": "round", "angleDegrees": 64.285714 },
+    { "id": "round-07", "family": "round", "angleDegrees": 90 },
+    { "id": "round-08", "family": "round", "angleDegrees": 115.714286 },
+    { "id": "round-09", "family": "round", "angleDegrees": 141.428571 },
+    { "id": "round-10", "family": "round", "angleDegrees": 167.142857 },
+    { "id": "round-11", "family": "round", "angleDegrees": 192.857143 },
+    { "id": "round-12", "family": "round", "angleDegrees": 218.571429 },
+    { "id": "round-13", "family": "round", "angleDegrees": 244.285714 }
+  ],
+  "compositing": ["far-chairs", "opaque-table", "near-chairs"],
+  "coordinateConvention": {
+    "x": "table length, negative left and positive right",
+    "y": "height above floor",
+    "z": "table width, negative toward camera and positive away from camera",
+    "chairForward": "local negative z; every occupied chair points toward table center"
+  }
+}

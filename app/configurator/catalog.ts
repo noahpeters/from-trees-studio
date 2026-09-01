@@ -8,19 +8,16 @@ export const edges = [
   { name: "Soft square", slug: "soft-square", column: 0 },
   { name: "Bullnose", slug: "bullnose", column: 1 },
   { name: "Live edge", slug: "live-edge", column: 2 },
-  { name: "Straight", slug: "straight", column: 3 },
 ] as const;
 
 export const circleEdges = [
   { name: "Soft square", slug: "soft-square", column: 0 },
   { name: "Bullnose", slug: "bullnose", column: 1 },
-  { name: "Straight", slug: "straight", column: 2 },
 ] as const;
 
 export const ovalEdges = [
   { name: "Soft square", slug: "soft-square", column: 0 },
   { name: "Bullnose", slug: "bullnose", column: 1 },
-  { name: "Straight", slug: "straight", column: 3 },
 ] as const;
 
 export const lengthBands = [
@@ -74,5 +71,5 @@ export function spritePath(shape: ShapeSlug, base: BaseSlug) {
 }
 
 export function chairLayerPath(shape: ShapeSlug, chair: Exclude<ChairSlug, "none">, layer: "back" | "front") {
-  return `/chairs/position-atlases/${shape}/${chair}-${layer}.webp`;
+  return `/chairs/position-atlases/${shape}/${chair}-${layer}.png?v=20`;
 }

@@ -9,13 +9,19 @@ import {
   chairs,
   edgesForShape,
   shapes,
-  spritePath,
   type BaseSlug,
   type ChairSlug,
   type EdgeSlug,
   type ShapeSlug,
 } from "./catalog";
-import { GeometryComposition, geometryChairAssetPaths } from "./geometry-composition";
+import { GeometryComposition, geometricStudySources } from "./geometry-composition";
+import {
+  environmentFeatureFlags,
+  featureFlagsForRequest,
+  featureOverrideSuffix,
+  type FeatureFlagName,
+  type FeatureFlags,
+} from "./feature-flags";
 
 const timbers = [
   { name: "White oak", slug: "white-oak", color: "#c3a579" },
@@ -23,9 +29,18 @@ const timbers = [
   { name: "Hard maple", slug: "hard-maple", color: "#d0b891" },
 ];
 
-const activeShapes = shapes;
+const shapeFeatureFlags: Record<ShapeSlug, FeatureFlagName> = {
+  rectangle: "table-shape-rectangle",
+  circle: "table-shape-circle",
+  oval: "table-shape-oval",
+};
 const baseUrlSlugs: Partial<Record<BaseSlug, string>> = { "curved-slab-frame": "curved-slab" };
 const preloadedSprites = new Set<string>();
+
+function enabledShapes(flags: FeatureFlags) {
+  const enabled = shapes.filter((item) => flags[shapeFeatureFlags[item.slug]]);
+  return enabled.length ? enabled : [shapes[0]];
+}
 
 function baseUrlSlug(base: BaseSlug) {
   return baseUrlSlugs[base] ?? base;
@@ -41,6 +56,8 @@ function rowForSize(shape: ShapeSlug, size: number) {
 }
 
 export default function Configurator() {
+  const [enabledFeatures, setEnabledFeatures] = useState(environmentFeatureFlags);
+  const activeShapes = enabledShapes(enabledFeatures);
   const [shape, setShape] = useState<ShapeSlug>("rectangle");
   const [timber, setTimber] = useState(timbers[0]);
   const [length, setLength] = useState(84);
@@ -71,7 +88,10 @@ export default function Configurator() {
   }
 
   function preloadStudy(nextShape: ShapeSlug, nextBase: BaseSlug) {
-    const source = spritePath(nextShape, nextBase);
+    const nextEdges = edgesForShape(nextShape);
+    const nextEdge = nextEdges.find((item) => item.slug === edge) ?? nextEdges[0];
+    const source = geometricStudySources(nextShape, nextBase, "none", nextEdge.column)?.table;
+    if (!source) return;
     if (preloadedSprites.has(source)) return;
     const image = new window.Image();
     image.src = source;
@@ -80,12 +100,21 @@ export default function Configurator() {
 
   function preloadChair(nextShape: ShapeSlug, nextChair: ChairSlug) {
     if (nextChair === "none") return;
-    geometryChairAssetPaths.forEach((source) => {
+    const nextBases = basesForShape(nextShape);
+    const nextBase = nextBases.some((item) => item.slug === selectedBase.slug)
+      ? selectedBase.slug
+      : nextBases[0].slug;
+    const nextEdges = edgesForShape(nextShape);
+    const nextEdge = nextEdges.find((item) => item.slug === edge) ?? nextEdges[0];
+    const sources = geometricStudySources(nextShape, nextBase, nextChair, nextEdge.column);
+    [sources?.back, sources?.front]
+      .filter((source): source is string => Boolean(source))
+      .forEach((source) => {
       if (preloadedSprites.has(source)) return;
       const image = new window.Image();
       image.src = source;
       preloadedSprites.add(source);
-    });
+      });
   }
 
   function preloadShape(nextShape: ShapeSlug) {
@@ -98,14 +127,22 @@ export default function Configurator() {
   }
 
   useEffect(() => {
-    const encoded = window.location.search.slice(1).replace(/=$/, "");
+    const search = new URLSearchParams(window.location.search);
+    const requestFeatures = featureFlagsForRequest(search);
+    const requestShapes = enabledShapes(requestFeatures);
+    setEnabledFeatures(requestFeatures);
+    const encoded = [...search.keys()].find(
+      (key) => key !== "env_enable" && key !== "env_disable",
+    ) ?? "";
     if (!encoded) {
+      setShape(requestShapes[0].slug);
       setUrlReady(true);
       return;
     }
     const parts = encoded.split("--").map(decodeURIComponent);
     const nextShape = parts[0] as ShapeSlug;
-    if (!activeShapes.some((item) => item.slug === nextShape)) {
+    if (!requestShapes.some((item) => item.slug === nextShape)) {
+      setShape(requestShapes[0].slug);
       setUrlReady(true);
       return;
     }
@@ -135,7 +172,8 @@ export default function Configurator() {
     const parts = shape === "circle"
       ? [shape, timber.slug, String(diameter), edge, baseUrlSlug(selectedBase.slug), chair]
       : [shape, timber.slug, String(length), String(width), edge, baseUrlSlug(selectedBase.slug), chair];
-    window.history.replaceState(null, "", `/configurator?${parts.join("--")}`);
+    const overrides = featureOverrideSuffix(new URLSearchParams(window.location.search));
+    window.history.replaceState(null, "", `/configurator?${parts.join("--")}${overrides}`);
   }, [urlReady, shape, timber.slug, diameter, length, width, edge, selectedBase.slug, chair]);
 
   const chairName = chairs.find((item) => item.slug === chair)?.name ?? "None";

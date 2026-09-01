@@ -1,0 +1,10 @@
+version: 1
+size_override: null
+max_cost_units: null
+requires_budget_approval: true
+verify: npm run verify
+protected_paths:
+  - .github/workflows/
+  - .openai/hosting.json
+deployment: forbidden
+notes: Follow AGENTS.md. Pull-request merges are human-only. Never deploy from a coding task; production deployment must run through GitHub Actions after a human merge.

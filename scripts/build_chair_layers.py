@@ -1,21 +1,111 @@
 """Build independent, perspective-correct table and chair layers."""
 
 from pathlib import Path
+from collections import deque
+import math
 from PIL import Image, ImageEnhance, ImageOps
+
+import generate_geometric_studies as geometry
+from prepare_style_v2_masters import neutral_background_to_alpha
 
 ROOT = Path(__file__).resolve().parents[1]
 TRANSPARENT = ROOT / "public" / "renders-transparent"
 TRANSPARENT_MASTERS = ROOT / "public" / "renders-transparent-masters"
 CHAIRS = ROOT / "public" / "chairs"
+STYLE_V2 = ROOT / "public" / "style-v2" / "chairs" / "masters"
+STYLE_TABLE_MASTERS = ROOT / "public" / "style-v2" / "tables" / "masters"
+STYLE_TABLE_COMPLETE_MASTERS = ROOT / "public" / "style-v2" / "tables" / "complete-masters"
+STYLE_TABLE_STRIPS = ROOT / "public" / "style-v2" / "tables" / "strips"
 CELL = 600
 FAMILIES = ("curved-back", "ladder-back", "spindle-back")
 PERSPECTIVE_VIEWS = ("far-left", "far-right", "near-left", "near-right")
 
 
+def keep_largest_component(source):
+    """Remove isolated alpha streaks while preserving the complete chair."""
+    alpha = source.getchannel("A")
+    width, height = alpha.size
+    pixels = alpha.load()
+    visited = bytearray(width * height)
+    winner = []
+    for y in range(height):
+        for x in range(width):
+            start = y * width + x
+            if visited[start] or pixels[x, y] < 32:
+                continue
+            visited[start] = 1
+            queue = deque([(x, y)])
+            component = []
+            while queue:
+                cx, cy = queue.popleft()
+                component.append((cx, cy))
+                for nx, ny in ((cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)):
+                    if nx < 0 or nx >= width or ny < 0 or ny >= height:
+                        continue
+                    index = ny * width + nx
+                    if visited[index] or pixels[nx, ny] < 32:
+                        continue
+                    visited[index] = 1
+                    queue.append((nx, ny))
+            if len(component) > len(winner):
+                winner = component
+    mask = Image.new("L", source.size)
+    mask_pixels = mask.load()
+    for x, y in winner:
+        mask_pixels[x, y] = pixels[x, y]
+    cleaned = source.copy()
+    cleaned.putalpha(mask)
+    bbox = mask.getbbox()
+    return cleaned.crop(bbox) if bbox else cleaned
+
+
+def prepare_complete_table_masters():
+    """Convert generated complete-table drawings to clean true-alpha masters."""
+    for path in sorted(STYLE_TABLE_COMPLETE_MASTERS.rglob("table-*.png")):
+        source = Image.open(path)
+        prepared = source.convert("RGBA") if source.mode == "RGBA" else neutral_background_to_alpha(source)
+        prepared = keep_largest_component(prepared)
+        padded = Image.new("RGBA", (prepared.width + 24, prepared.height + 24))
+        padded.alpha_composite(prepared, (12, 12))
+        padded.save(path, "PNG", optimize=True)
+
+
 def crop_views():
+    """Load high-fidelity perspective masters, falling back to legacy sheets."""
+    if STYLE_V2.exists():
+        views = {}
+        target = CHAIRS / "position-views"
+        target.mkdir(parents=True, exist_ok=True)
+        for family in FAMILIES:
+            for view in ("near-left", "far-left", "end-left", "rear-left"):
+                candidates = (
+                    STYLE_V2 / f"{family}-{view}-v3.png",
+                    STYLE_V2 / f"{family}-{view}-v2.png",
+                    STYLE_V2 / f"{family}-{view}.png",
+                )
+                source_path = next((path for path in candidates if path.exists()), candidates[-1])
+                if not source_path.exists():
+                    raise FileNotFoundError(source_path)
+                source = Image.open(source_path)
+                # Every high-fidelity chair master passes through the enclosed
+                # background remover. Several ladder and spindle studies had
+                # valid outer alpha but opaque white fields trapped between
+                # rails, spindles, seats, legs, and stretchers.
+                chair = neutral_background_to_alpha(source)
+                chair = keep_largest_component(chair)
+                chair.save(target / f"{family}-{view}.webp", "WEBP", lossless=True)
+                views[(family, view)] = chair
+                right_view = view.replace("left", "right")
+                mirrored = ImageOps.mirror(chair)
+                mirrored.save(target / f"{family}-{right_view}.webp", "WEBP", lossless=True)
+                views[(family, right_view)] = mirrored
+        return views
+
     """Crop perspective-specific RGBA studies; never fake yaw with 2D shear."""
-    source = Image.open(CHAIRS / "masters" / "chair-perspectives-transparent.png").convert("RGBA")
-    ends = Image.open(CHAIRS / "masters" / "chair-ends-transparent.png").convert("RGBA")
+    source_path = CHAIRS / "geometry" / "chair-perspectives-transparent.png"
+    ends_path = ROOT / "_unused-assets" / "public" / "masters" / "chair-ends-transparent.png"
+    source = Image.open(source_path).convert("RGBA")
+    ends = Image.open(ends_path).convert("RGBA")
     views = {}
     target = CHAIRS / "position-views"
     target.mkdir(parents=True, exist_ok=True)
@@ -24,8 +114,13 @@ def crop_views():
         cell_w, cell_h = sheet.width / columns, sheet.height / rows
         crop = sheet.crop((round(column * cell_w), round(row * cell_h),
                            round((column + 1) * cell_w), round((row + 1) * cell_h)))
-        bbox = crop.getchannel("A").getbbox()
-        return crop.crop(bbox) if bbox else crop
+        # Generated masters contain stray edge pixels outside the centered
+        # chair study. Remove that safety margin before component cleanup so a
+        # single attached scanline cannot expand the chair's crop.
+        inset_x = round(crop.width * .18)
+        inset_y = round(crop.height * .015)
+        crop = crop.crop((inset_x, inset_y, crop.width - inset_x, crop.height - inset_y))
+        return keep_largest_component(crop)
 
     for column, family in enumerate(FAMILIES):
         for row, view in enumerate(PERSPECTIVE_VIEWS):
@@ -59,6 +154,49 @@ def make_table_layers():
         result.save(target, "WEBP", lossless=True)
 
 
+def make_style_table_strips():
+    """Fit complete profile-specific table masters to the physical projection."""
+    edges = {
+        "rectangle": ("soft-square", "bullnose", "live-edge"),
+        "oval": ("soft-square", "bullnose"),
+        "circle": ("soft-square", "bullnose"),
+    }
+    for master_path in sorted(STYLE_TABLE_MASTERS.glob("table-*.png")):
+        _, shape, base = master_path.stem.split("-", 2)
+        if shape not in edges:
+            continue
+        for edge in edges[shape]:
+            profile_path = master_path if edge == "soft-square" else (
+                STYLE_TABLE_COMPLETE_MASTERS / shape / base / f"table-{edge}.png"
+            )
+            if not profile_path.exists():
+                raise FileNotFoundError(profile_path)
+            profiled_master = Image.open(profile_path).convert("RGBA")
+            strip = Image.new("RGBA", (CELL, CELL * 3))
+            for row in range(3):
+                if shape == "circle":
+                    diameter = geometry.MODEL["table"]["circleDiameters"][row]
+                    envelope = geometry.draw_table(diameter, diameter, base, shape, edge)
+                else:
+                    length = geometry.MODEL["table"]["rectangleLengths"][row]
+                    envelope = geometry.draw_table(
+                        length, geometry.MODEL["table"]["canonicalWidth"], base, shape, edge
+                    )
+                bbox = envelope.getbbox()
+                if not bbox:
+                    continue
+                left, top, right, bottom = bbox
+                table = profiled_master.resize(
+                    (right - left, bottom - top), Image.Resampling.LANCZOS
+                )
+                cell = Image.new("RGBA", (CELL, CELL))
+                cell.alpha_composite(table, (left, top))
+                strip.alpha_composite(cell, (0, row * CELL))
+            target = STYLE_TABLE_STRIPS / shape / base
+            target.mkdir(parents=True, exist_ok=True)
+            strip.save(target / f"table-{edge}.png", "PNG", optimize=True)
+
+
 def transformed(source, height, width_factor=1.0, mirror=False, shear=0.0, rotation=0.0):
     ratio = height / source.height
     chair = source.resize((max(1, round(source.width * ratio * width_factor)), height), Image.Resampling.LANCZOS)
@@ -79,97 +217,123 @@ def place(canvas, source, x, bottom, **kwargs):
     canvas.alpha_composite(chair, (round(x - chair.width / 2), round(bottom - chair.height)))
 
 
-def positions(shape, row):
-    count = (6, 8, 10)[row]
-    per_side = (count - 2) // 2
-    if shape == "circle":
-        far_span, near_span = (170, 205, 230)[row], (205, 245, 275)[row]
-    elif shape == "oval":
-        far_span, near_span = (205, 275, 340)[row], (250, 330, 405)[row]
+def chair_view(origin, yaw, _layer=None):
+    """Choose the approved view nearest the camera's chair-local azimuth.
+
+    Every chair's yaw already points its local forward axis at the table
+    center.  View selection must therefore be based on where the fixed camera
+    sits relative to that individual chair—not on the chair's screen side or
+    on a neighboring chair that happened to look plausible.
+    """
+    camera_dx = geometry.CAMERA.x - origin.x
+    camera_dz = geometry.CAMERA.z - origin.z
+    cosine, sine = math.cos(yaw), math.sin(yaw)
+    local_x = camera_dx * cosine + camera_dz * sine
+    local_z = -camera_dx * sine + camera_dz * cosine
+    azimuth = math.degrees(math.atan2(local_x, -local_z))
+    magnitude = abs(azimuth)
+    side = "left" if azimuth < 0 else "right"
+
+    # The approved master set contains front three-quarter, side, and rear
+    # three-quarter studies. These boundaries select the closest study while
+    # retaining its detailed hand-drawn artwork. Mirroring is baked offline.
+    if magnitude < 67.5:
+        perspective = "far"
+    elif magnitude < 122.5:
+        perspective = "end"
     else:
-        far_span, near_span = (120, 215, 300)[row], (120, 230, 300)[row]
-    def line(span):
-        return [300 - span / 2 + (span * i / max(1, per_side - 1)) for i in range(per_side)]
-    far, near = line(far_span), line(near_span)
-    return far, near
+        perspective = "rear"
+    return f"{perspective}-{side}"
 
 
-# Traced from the approved six-chair reference: the near side descends toward
-# the camera from left to right, while the far side recedes behind the top.
-# Eight- and ten-chair layouts extend the same perspective lines.
-REFERENCE_RECTANGLE = (
-    {
-        "far": ((210, 330, 136, "far-left", .94), (330, 318, 124, "far-right", .88)),
-        "near": ((330, 488, 168, "near-left", .98), (440, 452, 148, "near-right", .90)),
-        "far_end": (518, 370, 132, .88),
-        "near_end": (90, 455, 168, .98),
-    },
-    {
-        "far": ((165, 335, 142, "far-left", .96), (280, 324, 132, "far-left", .92),
-                (380, 312, 120, "far-right", .86)),
-        "near": ((270, 500, 176, "near-left", 1), (365, 470, 160, "near-right", .94),
-                 (450, 440, 144, "near-right", .88)),
-        "far_end": (520, 382, 134, .88),
-        "near_end": (80, 462, 172, .98),
-    },
-    {
-        "far": ((135, 340, 144, "far-left", .98), (225, 332, 136, "far-left", .94),
-                (310, 322, 128, "far-right", .90), (390, 312, 120, "far-right", .86)),
-        "near": ((225, 510, 180, "near-left", 1), (305, 492, 170, "near-left", .97),
-                 (380, 466, 158, "near-right", .93), (450, 440, 146, "near-right", .88)),
-        "far_end": (522, 384, 136, .88),
-        "near_end": (72, 470, 176, .98),
-    },
-)
+def position_view(shape, family, origin, yaw, layer):
+    """Resolve approved family-specific views for each physical anchor."""
+    view = chair_view(origin, yaw, layer)
+    if shape not in ("rectangle", "oval"):
+        return view
+
+    # On rectangular-family tops, the camera-side physical end projects to
+    # the lower-right of the study.
+    # Its approved treatment is the inward-facing three-quarter study. The
+    # rear study stops short of the tabletop axis, while the end study turns
+    # past it; this intermediate view points the seat directly at the table.
+    if layer == "near" and abs(origin.z) < .01 and origin.x < 0:
+        return "near-right"
+
+    # The opposite physical end uses the approved end-left treatment.
+    if layer == "far" and abs(origin.z) < .01 and origin.x > 0:
+        return "end-left"
+
+    # Ladder-back viewpoint labels are not visually equivalent to the other
+    # chair families. On the far long side, the mirrored master is the one
+    # whose seat and back actually turn inward toward the tabletop.
+    if family == "ladder-back" and layer == "far" and origin.z > 0:
+        return "far-right"
+    return view
 
 
-def make_position_atlases(views):
-    for shape in ("rectangle", "oval", "circle"):
+def projected_seats(shape, row):
+    if shape in ("rectangle", "oval"):
+        length = geometry.MODEL["table"]["rectangleLengths"][row]
+        band = ("small", "medium", "large")[row]
+        return geometry.rectangular_seats(length, geometry.MODEL["table"]["canonicalWidth"], band)
+    diameter = geometry.MODEL["table"]["circleDiameters"][row]
+    return geometry.round_seats(diameter, (6, 8, 10)[row])
+
+
+def place_projected(canvas, source, bbox):
+    """Fit beautiful chair artwork to a physically projected chair envelope."""
+    left, top, right, bottom = bbox
+    target_height = bottom - top
+    natural_width = source.width * target_height / source.height
+    width_factor = (right - left) / natural_width
+    place(canvas, source, x=(left + right) / 2, bottom=bottom,
+          height=target_height, width_factor=width_factor)
+
+
+def make_position_atlases(views, shapes=("rectangle", "oval", "circle")):
+    """Bake detailed chair studies into exact geometry-derived envelopes.
+
+    The inch model still owns every anchor, scale, yaw, depth, and layer.  A
+    direction-specific approved drawing is fitted into that projected chair's
+    final envelope during generation.  The browser receives finished sprites
+    and performs no transforms.
+    """
+    for shape in shapes:
         for family in FAMILIES:
             back_strip = Image.new("RGBA", (CELL, CELL * 3))
             front_strip = Image.new("RGBA", (CELL, CELL * 3))
             for row in range(3):
-                back = Image.new("RGBA", (CELL, CELL))
-                front = Image.new("RGBA", (CELL, CELL))
-                if shape == "rectangle":
-                    layout = REFERENCE_RECTANGLE[row]
-                    for x, bottom, height, view, width_factor in layout["far"]:
-                        place(back, views[(family, view)], x=x, bottom=bottom,
-                              height=height, width_factor=width_factor)
-                    for x, bottom, height, view, width_factor in layout["near"]:
-                        place(front, views[(family, view)], x=x, bottom=bottom,
-                              height=height, width_factor=width_factor)
-                    x, bottom, height, width_factor = layout["far_end"]
-                    place(back, views[(family, "end-right")], x=x, bottom=bottom,
-                          height=height, width_factor=width_factor)
-                    x, bottom, height, width_factor = layout["near_end"]
-                    place(front, views[(family, "end-left")], x=x, bottom=bottom,
-                          height=height, width_factor=width_factor)
-                else:
-                    far_xs, near_xs = positions(shape, row)
-                    for index, x in enumerate(far_xs):
-                        depth = index / max(1, len(far_xs) - 1)
-                        view = "far-left" if x < CELL / 2 else "far-right"
-                        place(back, views[(family, view)], x=x, bottom=304 - 10 * depth,
-                              height=218 - round(18 * depth), width_factor=.9 - .07 * depth)
-                    for index, x in enumerate(near_xs):
-                        depth = index / max(1, len(near_xs) - 1)
-                        view = "near-left" if x < CELL / 2 else "near-right"
-                        place(front, views[(family, view)], x=x - 5, bottom=512 - 16 * depth,
-                              height=238 - round(20 * depth), width_factor=.96 - .08 * depth)
-                    place(back, views[(family, "end-right")], x=(450, 480, 510)[row],
-                          bottom=366, height=206, width_factor=.88)
-                    place(front, views[(family, "end-left")], x=(150, 110, 60)[row],
-                          bottom=478, height=238, width_factor=.94)
+                seats = projected_seats(shape, row)
+                layers = {
+                    "far": Image.new("RGBA", (CELL, CELL)),
+                    "near": Image.new("RGBA", (CELL, CELL)),
+                }
+                for layer in ("far", "near"):
+                    ordered = sorted(
+                        (seat for seat in seats if seat[2] == layer),
+                        key=lambda seat: geometry.project(seat[0])[2],
+                        reverse=True,
+                    )
+                    for origin, yaw, _ in ordered:
+                        guide = geometry.draw_chair(origin, yaw, family)
+                        bbox = guide.getbbox()
+                        if not bbox:
+                            continue
+                        view = position_view(shape, family, origin, yaw, layer)
+                        place_projected(layers[layer], views[(family, view)], bbox)
+                back = layers["far"]
+                front = layers["near"]
                 back_strip.alpha_composite(back, (0, row * CELL))
                 front_strip.alpha_composite(front, (0, row * CELL))
             target = CHAIRS / "position-atlases" / shape
             target.mkdir(parents=True, exist_ok=True)
-            back_strip.save(target / f"{family}-back.webp", "WEBP", lossless=True)
-            front_strip.save(target / f"{family}-front.webp", "WEBP", lossless=True)
+            back_strip.save(target / f"{family}-back.png", "PNG", optimize=True)
+            front_strip.save(target / f"{family}-front.png", "PNG", optimize=True)
 
 
 if __name__ == "__main__":
-    chair_views = crop_views()
     make_table_layers()
-    make_position_atlases(chair_views)
+    prepare_complete_table_masters()
+    make_style_table_strips()
+    make_position_atlases(crop_views())

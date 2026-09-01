@@ -30,6 +30,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -40,3 +41,10 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# local generation and import scratch space
+__pycache__/
+*.py[cod]
+.git-sites-import-backup/
+_unused-assets/
+*.icloud-stale
