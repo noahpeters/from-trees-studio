@@ -87,7 +87,7 @@ export default function Home() {
             ["01", "Consult & measure", "We learn about your family, your space, inspiration, must-haves, and the way the finished piece needs to function."],
             ["02", "Design & refine", "Detailed measurements, material selections, and 3D renderings let us resolve every detail before anything is built."],
             ["03", "Engineer & build", "With the design approved, we create production drawings, select quality materials, and build with precision in our Riverside shop."],
-            ["04", "Deliver & install", "We coordinate a careful, professional installation or delivery with minimal disruption and close attention to the final fit."],
+            ["04", "Deliver & fitment", "We coordinate a careful, professional installation or delivery with minimal disruption and close attention to the final fit."],
           ].map(([num, title, copy]) => (
             <article key={num}><span>{num}</span><div><h3>{title}</h3><p>{copy}</p></div></article>
           ))}
