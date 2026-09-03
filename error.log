@@ -1,0 +1,4 @@
+[2026-09-03T18:03:29.335055+00:00] startup: base_url=https://chatgpt.com/backend-api path_style=wham
+[2026-09-03T18:03:29.335471+00:00] auth: mode=ChatGPT account_id=743a00dd-1af0-495d-a06b-18d34ad64b8e
+[2026-09-03T18:03:29.335558+00:00] auth: set ChatGPT-Account-Id header: 743a00dd-1af0-495d-a06b-18d34ad64b8e
+[2026-09-03T18:03:30.150595+00:00] http.list_tasks: env=<all> limit=5 cursor_in=<none> cursor_out=+RID:~G4U-AJOIzhkuLUMDABjFAA==#RT:1#TRC:5#RTD:FFMNeBmc06hP2994zep3KwV2dGZzLnBONDZXUExKSW1sMmltN2VOcGNYRTFCZmBgODU0YjExZWUuMmJnMS41OjZlLmIxN2MuMjllNDViZTc1YzlmAAV2dGZzLnBONDZXUExKSW1sMmltN2VOcGNYRTFCZmBgODU0YjExZWUuMmJnMS41OjZlLmIxN2MuMjllNDViZTc1YzlmAAVCZGRwdm91VnRmc1VwRHZzc2ZvdURwZWZVYnRsQ3Z0am9mdHQAA/rMzszI0c7F0c7Lqs7HxMvIxMrL0MfNzMnJx9POzsTOzv/6ip2Lk5+cn8idxcXMy8acnMmYzsbLzMycnMbIzczKxcaayMXLmpub/w==#ISV:2#IEO:65567#QCF:8#CID:2 items=5
